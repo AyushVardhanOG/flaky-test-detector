@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flaky Test Detector — Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #16181D;
+    --bg-raised: #1D2026;
+    --bg-raised-2: #242832;
+    --line: #2E323C;
+    --text: #E8E6E1;
+    --text-dim: #8A8D96;
+    --text-faint: #5A5D66;
+    --flaky: #D98E3C;
+    --flaky-dim: #6B5530;
+    --stable-pass: #6B9080;
+    --stable-pass-dim: #3A4A43;
+    --stable-fail: #A8514A;
+    --stable-fail-dim: #4A3230;
+    --errored: #8A6FA8;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+
+  header {
+    margin-bottom: 40px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 28px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 6px;
+  }
+
+  .upload-zone {
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    padding: 28px;
+    text-align: center;
+    margin-bottom: 36px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--flaky-dim);
+    background: var(--bg-raised);
+  }
+  .upload-zone input { display: none; }
+  .upload-zone .label {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .upload-zone .label strong { color: var(--text); }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .stat {
+    background: var(--bg-raised);
+    padding: 18px 20px;
+  }
+  .stat .num {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .stat .lbl {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .stat.flaky .num { color: var(--flaky); }
+  .stat.pass .num { color: var(--stable-pass); }
+  .stat.fail .num { color: var(--stable-fail); }
+  .stat.err .num { color: var(--errored); }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 32px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .test-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+  }
+  .test-card.flaky { border-left: 3px solid var(--flaky); }
+  .test-card.stable-fail { border-left: 3px solid var(--stable-fail); }
+  .test-card.stable-pass { border-left: 3px solid var(--stable-pass); opacity: 0.7; }
+  .test-card.errored { border-left: 3px solid var(--errored); }
+
+  .test-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .test-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text);
+    word-break: break-all;
+  }
+
+  .test-score {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .test-score strong { color: var(--flaky); font-size: 14px; }
+  .test-card.stable-fail .test-score strong { color: var(--stable-fail); }
+  .test-card.stable-pass .test-score strong { color: var(--stable-pass); }
+
+  .pulse-strip {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+  .pulse {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .pulse.pass { background: var(--stable-pass-dim); border: 1px solid var(--stable-pass); }
+  .pulse.fail { background: var(--stable-fail-dim); border: 1px solid var(--stable-fail); }
+  .pulse.missing { background: transparent; border: 1px dashed var(--text-faint); }
+  .pulse.skipped { background: var(--bg-raised-2); border: 1px solid var(--line); }
+
+  .pulse-meta {
+    margin-left: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  .footer-note {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+
+  @media (max-width: 600px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .test-top { flex-direction: column; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">CI Diagnostic / Test Stability Report</div>
+    <h1>Flaky Test Detector</h1>
+    <div class="subtitle">Load a flakiness_report.json from a detect.py run to see which tests are unreliable — and which are just broken.</div>
+  </header>
+
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".json">
+    <div class="label"><strong>Drop flakiness_report.json here</strong> or click to browse — or try the sample below</div>
+  </div>
+
+  <div id="content">
+    <div class="empty-state">No report loaded yet.</div>
+  </div>
+
+  <div class="footer-note">
+    Flakiness score = rate of PASS↔FAIL transitions across runs, not raw failure rate.<br>
+    A test that always fails the same way is a bug, not flakiness — it's classified separately.
+  </div>
+
+</div>
+
+<script>
+const SAMPLE_REPORT = [
+  {test_name: "test_sample.py::test_flaky_timing", classification: "FLAKY", flakiness_score: 0.5, pass_count: 6, fail_count: 9, total_runs: 15, history: ["FAILED","PASSED","PASSED","FAILED","FAILED","FAILED","FAILED","PASSED","FAILED","PASSED","FAILED","FAILED","FAILED","PASSED","PASSED"]},
+  {test_name: "test_sample.py::test_flaky_race", classification: "FLAKY", flakiness_score: 0.214, pass_count: 13, fail_count: 2, total_runs: 15, history: ["FAILED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","FAILED","PASSED","PASSED","PASSED","PASSED"]},
+  {test_name: "test_sample.py::test_subtraction", classification: "STABLE_FAIL", flakiness_score: 0.0, pass_count: 0, fail_count: 15, total_runs: 15, history: ["FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED","FAILED"]},
+  {test_name: "test_sample.py::test_addition", classification: "STABLE_PASS", flakiness_score: 0.0, pass_count: 15, fail_count: 0, total_runs: 15, history: ["PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED","PASSED"]}
+];
+
+function pulseClass(status) {
+  if (status === "PASSED") return "pass";
+  if (status === "FAILED") return "fail";
+  if (status === "SKIPPED") return "skipped";
+  return "missing";
+}
+
+function classLabel(c) {
+  return {FLAKY: "Flaky", STABLE_FAIL: "Stable fail", STABLE_PASS: "Stable pass", ERRORED: "Errored"}[c] || c;
+}
+
+function cardClassName(c) {
+  return {FLAKY: "flaky", STABLE_FAIL: "stable-fail", STABLE_PASS: "stable-pass", ERRORED: "errored"}[c] || "";
+}
+
+function render(reports) {
+  const flaky = reports.filter(r => r.classification === "FLAKY");
+  const stableFail = reports.filter(r => r.classification === "STABLE_FAIL");
+  const stablePass = reports.filter(r => r.classification === "STABLE_PASS");
+  const errored = reports.filter(r => r.classification === "ERRORED");
+
+  let html = `
+    <div class="stats">
+      <div class="stat flaky"><div class="num">${flaky.length}</div><div class="lbl">Flaky</div></div>
+      <div class="stat fail"><div class="num">${stableFail.length}</div><div class="lbl">Stable fail (real bugs)</div></div>
+      <div class="stat pass"><div class="num">${stablePass.length}</div><div class="lbl">Stable pass</div></div>
+      <div class="stat err"><div class="num">${errored.length}</div><div class="lbl">Errored</div></div>
+    </div>
+  `;
+
+  function renderGroup(label, items) {
+    if (items.length === 0) return "";
+    let group = `<div class="section-label">${label}</div>`;
+    items.forEach(r => {
+      group += `
+        <div class="test-card ${cardClassName(r.classification)}">
+          <div class="test-top">
+            <div class="test-name">${r.test_name}</div>
+            <div class="test-score">score <strong>${r.flakiness_score.toFixed(2)}</strong> · ${r.pass_count}P / ${r.fail_count}F / ${r.total_runs} runs</div>
+          </div>
+          <div class="pulse-strip">
+            ${r.history.map(s => `<div class="pulse ${pulseClass(s)}" title="${s}"></div>`).join("")}
+            <div class="pulse-meta">${classLabel(r.classification)}</div>
+          </div>
+        </div>
+      `;
+    });
+    return group;
+  }
+
+  html += renderGroup("⚠ Flaky — inconsistent across identical runs", flaky);
+  html += renderGroup("✕ Stable fail — broken every time, not flaky", stableFail);
+  html += renderGroup("○ Errored — setup/infra issue", errored);
+  html += renderGroup("✓ Stable pass", stablePass);
+
+  document.getElementById("content").innerHTML = html;
+}
+
+document.getElementById("uploadZone").addEventListener("click", () => document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const data = JSON.parse(evt.target.result);
+      render(data);
+    } catch (err) {
+      document.getElementById("content").innerHTML = `<div class="empty-state">Couldn't parse that file. Make sure it's a flakiness_report.json from detect.py.</div>`;
+    }
+  };
+  reader.readAsText(file);
+});
+
+["dragover", "dragleave", "drop"].forEach(evt => {
+  document.getElementById("uploadZone").addEventListener(evt, (e) => {
+    e.preventDefault();
+    document.getElementById("uploadZone").classList.toggle("dragover", evt === "dragover");
+  });
+});
+document.getElementById("uploadZone").addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      render(JSON.parse(evt.target.result));
+    } catch (err) {
+      document.getElementById("content").innerHTML = `<div class="empty-state">Couldn't parse that file.</div>`;
+    }
+  };
+  reader.readAsText(file);
+});
+
+render(SAMPLE_REPORT);
+</script>
+</body>
+</html>
