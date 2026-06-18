@@ -1,0 +1,78 @@
+name: Flaky Test Detector
+
+# Runs your test suite multiple times on every PR and comments if any
+# tests show inconsistent (flaky) results across identical runs.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  detect-flaky-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install detector dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install project dependencies
+        run: |
+          # EDIT THIS: install whatever your project needs to run its own tests
+          # e.g. pip install -r requirements.txt
+          # e.g. npm ci
+          echo "Add your project's install step here"
+
+      - name: Run flaky test detector
+        id: detect
+        run: |
+          python detect.py \
+            --command "python -m pytest -v" \
+            --runs 8 \
+            --framework pytest \
+            --output-dir flaky-results
+        continue-on-error: true
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flakiness-report
+          path: flaky-results/flakiness_report.json
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'flaky-results/flakiness_report.json';
+            if (!fs.existsSync(path)) {
+              console.log('No report found, skipping comment.');
+              return;
+            }
+            const reports = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const flaky = reports.filter(r => r.classification === 'FLAKY');
+
+            let body;
+            if (flaky.length === 0) {
+              body = '✅ **Flaky Test Detector**: No flaky tests detected across repeated runs.';
+            } else {
+              const rows = flaky.map(r =>
+                `| \`${r.test_name}\` | ${r.flakiness_score.toFixed(2)} | ${r.pass_count}P / ${r.fail_count}F / ${r.total_runs} runs |`
+              ).join('\n');
+              body = `⚠️ **Flaky Test Detector** found ${flaky.length} flaky test(s):\n\n` +
+                     `| Test | Flakiness Score | Results |\n|---|---|---|\n${rows}\n\n` +
+                     `_Flakiness score = rate of pass/fail flips across identical runs. Full report in the workflow artifact._`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
