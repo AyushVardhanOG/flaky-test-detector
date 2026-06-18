@@ -41,20 +41,22 @@ def run_command_n_times(command: str, n: int, cwd: str = ".", timeout: int = 120
         timed_out = False
         try:
             proc = subprocess.run(
-                command,
-                shell=True,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
+            command,
+            shell=True,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
             )
             exit_code = proc.returncode
             stdout = proc.stdout
             stderr = proc.stderr
         except subprocess.TimeoutExpired as e:
             exit_code = -1
-            stdout = e.stdout or ""
-            stderr = (e.stderr or "") + "\n[TIMED OUT]"
+            stdout = (e.stdout or b"").decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            stderr = ((e.stderr or b"").decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")) + "\n[TIMED OUT]"
             timed_out = True
 
         duration = time.time() - start
