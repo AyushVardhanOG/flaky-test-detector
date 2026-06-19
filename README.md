@@ -76,7 +76,7 @@ the box.
 
 ## Web dashboard
 
-Open `dashboard/index.html` in any browser — no server needed. Drag and
+Open `docs/index.html` in any browser — no server needed. Drag and
 drop a `flakiness_report.json` from a `detect.py` run to visualize
 results. Sample data is preloaded so it's not empty on first open.
 
