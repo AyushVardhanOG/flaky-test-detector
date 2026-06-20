@@ -18,6 +18,10 @@ is either ad-hoc (re-run and squint) or buried in expensive internal
 tooling at big companies. This is a small, free version of that idea that
 runs locally or in any GitHub Actions pipeline.
 
+# Live Demo
+
+https://ayushvardhanog.github.io/flaky-test-detector/
+
 ## How it works
 
 1. **Run** — executes your test command N times sequentially (not in
